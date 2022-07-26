@@ -4,21 +4,19 @@ Created on Wed Jan  9 16:11:50 2019
 
 @author: USUARIO
 """
-import datetime
+from math import exp, log
+
 import pandas as pd
 import numpy as np
-from os.path import join
-from functions_standard import (
+from auxiliary.functions_standard import (
     check_limits,
     append_ones,
     float_dict_to_string as fd2st,
-    get_timestamp_label,
     augment_feature_space,
-)
-from functions_auxiliary import (
-    check_q_j,
     compute_metrics,
 )
+
+
 # from optimization import (
 #     solve_optimization_model,
 #     create_bigadata_nv_model,
@@ -60,9 +58,15 @@ def load_data(Label, Setting, add_ones=True, case='real'):
     return wind, b_data, h_data, features
 
 
-def load_data_forecast(Label, Setting, add_ones=False):
+def load_data_forecast(Label, Setting, csv_format=',', add_ones=False):
+    if csv_format == ',':
+        sep, decimal = ',', '.'
+    elif csv_format == ';':
+        sep, decimal = ';', ','
+    else:
+        raise ValueError('Invalid csv option.')
 
-    df = pd.read_csv(Setting.input_data_path, sep=',', decimal='.')
+    df = pd.read_csv(Setting.input_data_path, sep=sep, decimal=decimal)
     df = preprocess_input_data(
         df, Label, Setting, add_ones=add_ones, col_nan_allowed=12.5, tot_nan_allowed=7.5,
     )
@@ -227,8 +231,7 @@ def compute_results(X_mat, Y_mat, b, h, q_j_dict, Label, y_bounds=None, prefix="
 
 def compute_fixed_action_q(wind, b_data, h_data, x_data, y_bounds, q_0=None):
     from optimization_lp import (
-        create_bigadata_nv_model, standard_solving_configuration,
-        solve_optimization_model, solve_optimization_model_direct,
+        create_bigadata_nv_model, solve_optimization_model_direct,
     )
 
     standard_solving_configuration = {
@@ -401,3 +404,35 @@ def compute_feasible_set_diameter(wind, x_data, y_bounds, q_0=None):
 #     # Write all sheets to file
 #     writer.save()
 
+
+def sigmoidp(x):
+    if x <= 0:
+        return 1 / (1 + exp(x))
+    else:
+        return 1 - 1 / (1 + exp(-x))
+
+
+def sigmoidn(x):
+    if x <= 0:
+        return 1 - 1/(1 + exp(x))
+    else:
+        return 1/(1 + exp(-x))
+
+
+def exp_func_01(x):
+    return log(1 + exp(-x))
+
+
+def exp_func_02(x):
+    if x <= 0:
+        return exp(x) / (1 + exp(x)) ** 2
+    else:
+        return 1 / (1 + exp(-x)) - 1 / (1 + exp(-x)) ** 2
+
+
+def exp_func_03(x, alpha, capacity):
+    x = max(- capacity, min(capacity, x)) / alpha
+    if x <= 0:
+        return exp(x) / (1 + exp(x)) ** 2
+    else:
+        return 1 / (1 + exp(-x)) - 1 / (1 + exp(-x)) ** 2

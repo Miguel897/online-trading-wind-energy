@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from functions_standard import time_it
+from auxiliary.functions_standard import time_it
 from dataclasses import dataclass
 from optimization_lp import create_bigadata_nv_model, solve_optimization_model_direct, standard_solving_configuration
 from functions_core import (
@@ -85,7 +85,7 @@ def routine01(vebose=True):
         return distance, q1, q2
 
     # offers = (x_data * q_j).sum(axis=1)
-    # offers.to_csv('offers.csv')
+    # offers.to_csv('data_offers.csv')
 
 
 def routine01b(wind, b_data, h_data, x_data, y_bounds):

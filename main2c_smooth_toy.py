@@ -2,19 +2,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from time import process_time
-from dataclasses import dataclass
 from os.path import join
-from functions_auxiliary import sigmoidp, exp_func_01, exp_func_03
-from functions_standard import (
-    create_directory, time_it,
+from auxiliary.functions_standard import (
     parallel_half_space_projection,
-    get_timestamp_label,
 )
 from functions_core import (
-    load_data, compute_fixed_action_q
+    load_data, compute_fixed_action_q, sigmoidp, exp_func_01, exp_func_03
 )
-from itertools import product
-from config2c_smooth_toy import Label, Setting, platform_context, script_simulation_dict
+from config2c_smooth_toy import Label, Setting
 
 
 class NVOnline:

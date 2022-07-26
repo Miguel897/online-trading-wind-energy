@@ -1,19 +1,12 @@
-
-import os
 import datetime
-import pandas as pd
-import numpy as np
 from dataclasses import dataclass
-from itertools import product
 from os import getcwd
 from os.path import join
 from functools import reduce
-from functions_standard import (
+from auxiliary.functions_standard import (
     get_timestamp_label,
     PlatformContext,
     SimulationContext,
-    create_directory,
-    save_code2,
 )
 
 platform_context = PlatformContext()
@@ -217,7 +210,6 @@ source_files = (
     'configuration.py',
     'optimization.py',
     'functions_core.py',
-    'functions_auxiliary.py',
 )
 optimization_configuration = {
     'solver_name': 'cplex',

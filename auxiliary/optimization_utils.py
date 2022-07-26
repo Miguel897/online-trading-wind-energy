@@ -1,7 +1,10 @@
 from os.path import join
-from auxiliary.supress_log_file import custom_solver_factory
 from pyomo.environ import SolverFactory, SolverManagerFactory
 from pyomo.opt.results.solver import SolverStatus as SolSt, TerminationCondition as TermCond
+try:
+    from private_files.aux_suppress_log_file import custom_solver_factory
+except ModuleNotFoundError:
+    pass
 
 
 def solve_optimization_model_direct(optimization_model, config, using_pyomo_kernel=False):

@@ -2,19 +2,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from time import process_time
-from dataclasses import dataclass
 from os.path import join
-from functions_auxiliary import sigmoidp, exp_func_01, exp_func_03
-from functions_standard import (
-    create_directory, time_it,
-    parallel_half_space_projection,
+from auxiliary.functions_standard import (
+    create_directory, parallel_half_space_projection,
     get_timestamp_label,
 )
 from functions_core import (
-    load_data, compute_fixed_action_q
+    load_data, sigmoidp, exp_func_01, exp_func_03
 )
 from itertools import product
-from config2_online_bidding import Label, Setting, platform_context, script_simulation_dict
+from config2_online_bidding import Label, Setting
 
 
 class NVOnline:
@@ -499,7 +496,7 @@ def main_02_cross_val():
 
         container.at[e, m] = nv_online.computation_statistics['OL_cost']
 
-    container.to_csv('ol_hype_training.csv')
+    container.to_csv('table_hyper_training.csv')
 
 
 if __name__ == '__main__':

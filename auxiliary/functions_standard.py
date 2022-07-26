@@ -10,7 +10,12 @@ from time import process_time
 from pathlib import Path
 from shutil import copy2, copytree, ignore_patterns
 from itertools import product
-
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score,
+    explained_variance_score,
+)
 
 # STANDARD SHORTCUTS
 
@@ -24,6 +29,8 @@ TXT = ".txt"
 
 
 class PlatformContext:
+    """Class to identify the environment in which the simulation is running and update environmental variables.
+    """
 
     def __init__(self):
         from platform import system, node
@@ -74,7 +81,10 @@ class PlatformContext:
 
 
 class SimulationContext:
-    def __init__(self, default_simulation_mode, full_simulation_list, batch_size=1, sim_cases_indexes=None):
+    """Class to compute the simulation list for parallelization in the supercomputer Picasso.
+    """
+
+    def __init__(self,  full_simulation_list, default_simulation_mode='all', batch_size=1, sim_cases_indexes=None):
 
         self.simulation_mode = default_simulation_mode
         self.full_simulation_list = full_simulation_list
@@ -114,6 +124,7 @@ class SimulationContext:
 def float_dict_to_string(float_dict, decimal=3):
     """Change the format of a dict with a lot of zeros.
     """
+
     string = "{0:." + str(decimal) + "f}"
     target = str(string.format(0))
     element_list = [element[0].replace("'", "") + (": " + string + ", ").format(
@@ -124,31 +135,7 @@ def float_dict_to_string(float_dict, decimal=3):
     return element_list[:-2]
 
 
-def append_ones(data, df_output=False, column_names=None):
-    """Append a column of ones into a 2D array or DataFrame.
-    """
-    if isinstance(data, np.ndarray):
-        shape = np.shape(data)
-        if len(shape) != 2:
-            raise ValueError('Invalid array dimension.')
-
-        data = np.column_stack([np.ones((np.shape(data)[0], 1)), data])
-        if df_output:
-            if column_names is None:
-                column_names = [f'c{i}' for i in range(shape[1])]
-            data = pd.DataFrame(data, columns=['ones'] + column_names)
-    elif isinstance(data, pd.DataFrame):
-        columns = list(data.columns)
-        data = data.copy()
-        data['ones'] = 1
-        data = data[['ones'] + columns]
-    else:
-        raise ValueError('Invalid object.')
-
-    return data
-
-
-def data_to_dict(data, start=0):
+def array_to_dict(data, start=0):
     """Transform array-like data into a dictionary where the key is a tuple with the position of the element.
     """
 
@@ -212,6 +199,7 @@ def merge_same_key_dictionaries(dictionary_list, base_dict=None, df_output=False
 def get_timestamp_label(underscore=False):
     """Returns a string timestamp label of the form YYYYMMDD_HHMMSS.
     """
+
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     if underscore:
         timestamp += '_'
@@ -221,6 +209,7 @@ def get_timestamp_label(underscore=False):
 def create_directory(folder_name="", parent_path=None, parents=True, exist_ok=True, timestamp=False):
     """Handy function for creating directories.
     """
+
     if not parent_path:
         parent_path = os.getcwd()
     prefix = get_timestamp_label(underscore=True) if timestamp else ''
@@ -233,6 +222,7 @@ def create_directory(folder_name="", parent_path=None, parents=True, exist_ok=Tr
 def save_code(source_files, simulation_path, folder_name='Source'):
     """Copy source files of simulation to the results folder.
     """
+
     create_directory(folder_name=folder_name, parent_path=simulation_path)
     from_path = os.getcwd()
     to_path = os.path.join(simulation_path, folder_name)
@@ -284,7 +274,9 @@ def profiler(criteria='cumtime', subcalls=True, builtins=False):
 
 
 def debug(func):
-    """Print the function signature and return value"""
+    """Print the function signature and return value.
+    """
+
     @functools.wraps(func)
     def wrapper_debug(*args, **kwargs):
         args_repr = [repr(a) for a in args]                      # 1
@@ -298,7 +290,9 @@ def debug(func):
 
 
 def timer(func):
-    """Print the runtime of the decorated function"""
+    """Print the runtime of the decorated function.
+    """
+
     @functools.wraps(func)
     def wrapper_timer(*args, **kwargs):
         start_time = time.perf_counter()    # 1
@@ -322,9 +316,37 @@ def list_to_df(data, columns):
     return df
 
 
+# MATH FUNCTIONS
+
+def append_ones(data, df_output=False, column_names=None):
+    """Append a column of ones into a 2D array or DataFrame.
+    """
+
+    if isinstance(data, np.ndarray):
+        shape = np.shape(data)
+        if len(shape) != 2:
+            raise ValueError('Invalid array dimension.')
+
+        data = np.column_stack([np.ones((np.shape(data)[0], 1)), data])
+        if df_output:
+            if column_names is None:
+                column_names = [f'c{i}' for i in range(shape[1])]
+            data = pd.DataFrame(data, columns=['ones'] + column_names)
+    elif isinstance(data, pd.DataFrame):
+        columns = list(data.columns)
+        data = data.copy()
+        data['ones'] = 1
+        data = data[['ones'] + columns]
+    else:
+        raise ValueError('Invalid object.')
+
+    return data
+
+
 def feature_scaling(scal_type, *X_mats):
     """Perform scaling in feature matrices
     """
+
     assert len(X_mats) >= 2
     assert scal_type in ["max", "mnmx", "stdr"]
 
@@ -371,6 +393,7 @@ def feature_scaling(scal_type, *X_mats):
 def check_limits(series, bounds, verbose=False, tolerance=1e-6):
     """Check a data series is between bounds. Modify elements outside limits and count them.
     """
+
     c_lower, c_upper, outliers = 0, 0, []
     tolerance = (np.max(series) - np.min(series)) * tolerance
     for i in range(len(series)):
@@ -399,6 +422,8 @@ def check_limits(series, bounds, verbose=False, tolerance=1e-6):
 
 
 def natural_cubic_spline_basis(x, df, ones=True, cname=None):
+    """Cubic spline transformation of the feature vector x.
+    """
 
     x = np.squeeze(x)
 
@@ -430,6 +455,8 @@ def natural_cubic_spline_basis(x, df, ones=True, cname=None):
 
 
 def augment_feature_space(df, columns, dgf):
+    """Compute the cubic spline basis of a set of columns in a df.
+    """
 
     df = df.copy(deep=True)
     for col in columns:
@@ -443,6 +470,8 @@ def augment_feature_space(df, columns, dgf):
 
 
 def half_space_projection(y, a, b):
+    """Half space projection see function parallel_half_space_projection.
+    """
 
     if np.dot(a, y) <= b:
         return y
@@ -451,9 +480,10 @@ def half_space_projection(y, a, b):
 
 
 def parallel_half_space_projection(y, a, lh, rh):
-    # Check https://math.stackexchange.com/questions/318740/orthogonal-projection-onto-a-half-space
-    # Finds the projection x of vector y onto the intersection of half spaces of the form lh <= a'x <= rh
-    # Half spaces are convex and the intersection is also convex. The solution in unique.
+    """Check https://math.stackexchange.com/questions/318740/orthogonal-projection-onto-a-half-space
+    Finds the projection x of vector y onto the intersection of half spaces of the form lh <= a'x <= rh
+    Half spaces are convex and the intersection is also convex. The solution in unique.
+    """
 
     if lh <= np.dot(a, y) <= rh:
         return y
@@ -461,6 +491,151 @@ def parallel_half_space_projection(y, a, lh, rh):
         return half_space_projection(y, a, rh)
     elif np.dot(a, y) < lh:
         return half_space_projection(y, -a, -lh)
+
+
+def check_q_j(coef_list, labels, err_limit=0.05):
+    """Supervise feature regressors to detect NaNs.
+    """
+    assert not any([isinstance(x, (int, float)) for x in labels])
+    assert len(coef_list) == len(labels)
+
+    err = sum([1. if q is None else 0 for q in coef_list]) / len(coef_list)
+    coef_dict = {key: value for (key, value) in zip(labels, coef_list)}
+    if err > err_limit:
+        print('Coeficients: ', coef_dict)
+        raise ValueError(
+            'The solver is unable to find a solution for a significant amount of columns. Error rate={0}'.format(err))
+    elif err > 0:
+        print('Coeficients: ', coef_dict)
+        print('The solver is unable to find a solution for some columns. Error rate={0}'.format(err))
+
+    return coef_dict, err
+
+
+def compute_metrics(y_true, y_pred, b, h, metrics=None):
+    """Evaluates different metrics.
+    """
+    metrics_dict = {}
+    if 'MAE' in metrics:
+        metrics_dict['MAE'] = mean_absolute_error(y_true, y_pred)
+    if 'MAPE' in metrics:
+        metrics_dict['MAPE'] = np.mean(np.abs(y_true - y_pred) / y_true) * 100
+    if 'RMSE' in metrics:
+        metrics_dict['RMSE'] = mean_squared_error(y_true, y_pred) ** 0.5
+    if 'R2' in metrics:
+        metrics_dict['R2'] = r2_score(y_true, y_pred)
+    if 'EVAR' in metrics:
+        metrics_dict['EVAR'] = explained_variance_score(y_true, y_pred)
+    if 'AOL' in metrics:
+        y = list(y_true - y_pred)
+        try:
+            h[0]
+        except TypeError:
+            h, b = h * np.ones(len(y)), b * np.ones(len(y))
+        metrics_dict['AOL'] = sum(
+            [h[i] * abs(y[i]) if y[i] < 0 else b[i] * y[i] for i in range(len(y))]
+        ) / len(y)
+
+    return metrics_dict
+
+
+def points_to_equation_system(line_list, test_point):
+    """Line_list is a df with two columns from and to containing points that define a line per row.
+    test_point is a point inside the region to define >= or <= constraints.
+    The result are the A matrix and b vector that define the convex feasible set.
+    """
+
+    test_point = test_point.reshape((2, 1))
+    dimension = len(line_list['from'].iat[0])
+    A = np.zeros((0, dimension))
+    b = np.zeros((0, 1))
+    line_index = list(line_list.index)
+    for line in line_index:
+        A_row, b_row = compute_line_coefficients(
+            line_list.at[line, 'from'], line_list.at[line, 'to']
+        )
+        if A_row @ test_point <= b_row:
+            A = np.vstack((A, A_row))
+            b = np.vstack((b, b_row))
+        else:
+            A = np.vstack((A, -1 * A_row))
+            b = np.vstack((b, -1 * b_row))
+    return A, b
+
+
+def compute_line_coefficients(point1, point2):
+    """Auxiliary function see points_to_equation_system.
+    """
+
+    if len(point1) != len(point2):
+        raise ValueError('Point dimension mismatch.')
+
+    if point1[0] == point2[0]:
+        A_row = np.array([1, 0])
+        b_row = np.array(point1[0])
+    elif point1[1] == point2[1]:
+        A_row = np.array([0, 1])
+        b_row = np.array(point1[1])
+    else:
+        x_coords, y_coords = zip(point1, point2)
+        coef = np.polyfit(x_coords, y_coords, 1)
+        m, n = np.round(coef, 7)
+        A_row = np.array([-m, 1])
+        b_row = np.array(n)
+    A_row = A_row.reshape((1, len(point1)))
+    b_row = b_row.reshape((1, 1))
+
+    return A_row, b_row
+
+
+class ExponentialMovingAverage:
+    """ Class to compute the exponential moving average of a series with a parameter lamb.
+    example: ema = ExponentialMovingAverage([4, 7, 2, 6, 8, 9, 3], 0.9)
+    """
+    def __init__(self, raw_series, lamb):
+        self.raw_series = raw_series
+        self.lamb = lamb
+        self.ema_series = []
+        self.w_t = []
+        self.option = '1'
+        # self.option = '2'
+
+    def compute_smooth_series(self):
+        st = self.raw_series[0]
+        self.ema_series.append(st)
+        for point in self.raw_series[1:]:
+            if self.option == '1':
+                st = (1 - self.lamb) * point + self.lamb * st
+            else:
+                st = self.lamb * point + (1 - self.lamb) * st
+            self.ema_series.append(st)
+
+    def compute_sum(self):
+        s_t = []
+        for i in range(1, len(self.raw_series) + 1):
+            w_i = self.compute_weights(i)
+            print(w_i, sum(w_i))
+
+            # for k in range(1,  i + 1):
+            s_t.append(sum([w * y for w, y in zip(w_i, self.raw_series[:i])]))
+        return s_t
+
+    def compute_weights(self, T):
+        if self.option == '1':
+            series = [(1 - self.lamb) * self.lamb ** (T-t) for t in range(1, T + 1)]
+            series[0] = self.lamb ** (T - 1)
+        else:
+            series = [(1 - self.lamb) ** (T-t) * self.lamb for t in range(1, T + 1)]
+            series[0] = (1 - self.lamb) ** (T - 1)
+
+        return series
+
+    def plot_series(self):
+        import matplotlib.pyplot as plt
+        plt.plot(range(len(self.raw_series)), self.raw_series, color='cyan', label='raw')
+        plt.plot(range(len(self.ema_series)), self.ema_series, color='orange', label='ema')
+        plt.legend()
+        plt.show()
 
 
 if __name__ == '__main__':

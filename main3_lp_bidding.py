@@ -3,15 +3,10 @@ import numpy as np
 import pandas as pd
 from time import process_time
 from os.path import join
-from dataclasses import dataclass
-from functions_auxiliary import sigmoidp, exp_func_01, exp_func_03
-from functions_standard import create_directory, time_it, parallel_half_space_projection
 from functions_core import (
     load_data, compute_fixed_action_q,
-    compute_feasible_set_diameter,
-)
-from config3_lp_bidding import Label, Setting, platform_context, script_simulation_dict
-from itertools import product
+    compute_feasible_set_diameter, )
+from config3_lp_bidding import Label, Setting
 
 
 class NVlp:

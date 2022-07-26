@@ -1,19 +1,13 @@
-
-import os
 import datetime
-import pandas as pd
-import numpy as np
 from dataclasses import dataclass
-from itertools import product
 from os import getcwd
 from os.path import join
 from functools import reduce
-from functions_standard import (
+from auxiliary.functions_standard import (
     get_timestamp_label,
     PlatformContext,
     SimulationContext,
     create_directory,
-    save_code2,
 )
 
 platform_context = PlatformContext()
@@ -118,7 +112,7 @@ class Setting:
     input_folder_path: str = input_path
     parent_path: str = simulation_path
     raw_folder_name: str = 'online_nv'
-    input_data_filename: str = 'dataset_DK1_wind_entsoe_2015_2021_scl_1h.csv'
+    input_data_filename: str = 'data_DK1_wind_entsoe_2015_2021_scl_1h.csv'
     # test_start = datetime.datetime.strptime('2015-12-26', '%Y-%m-%d')  # Included
     # test_start = datetime.datetime.strptime('2015-12-30', '%Y-%m-%d')  # Included
     # test_start = datetime.datetime.strptime('2015-07-01', '%Y-%m-%d')  # Included
