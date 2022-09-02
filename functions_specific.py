@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from math import exp, log
 from functions_standard import (
     check_limits,
     append_ones,
@@ -18,22 +17,18 @@ except ModuleNotFoundError:
     from optimization_lp import solve_optimization_model
 
 
-def load_data(Label, Setting, add_ones=True, case='real'):
-    if case == 'real':
+def load_data(Label, Setting, add_ones=True, case='case_study'):
+    if case == 'case_study':
         df = pd.read_csv(Setting.input_data_path, sep=',', decimal='.')
-        df.drop(columns=['DK1_won_MAE'], inplace=True)
-        df = preprocess_input_data(
-            df, Label, Setting, add_ones=add_ones, col_nan_allowed=12.5, tot_nan_allowed=7.5,
-        )
+        df.drop(columns=[Label.price_lag1], inplace=True)
+        df = preprocess_input_data(df, Label, Setting, add_ones=add_ones)
         wind, psi_p, psi_m, features = withdraw_variables(df, Label, Setting, bh_ge_zero=True)
-    elif case == 'synthetic':
-        wind, psi_p, psi_m, features = generate_toy_steps_data(Label, Setting)
-    elif case == 'convergence':
-        wind, features = generate_toy_convergence_data(Label, Setting)
+    elif case == 'dynamic':
+        wind, psi_p, psi_m, features = generate_toy_dynamic_data(Label, Setting)
+    elif case == 'smooth':
+        wind, features = generate_toy_smooth_vs_subgradient_data(Label, Setting)
         df = pd.read_csv(Setting.input_data_path, sep=',', decimal='.')
-        df = preprocess_input_data(
-            df, Label, Setting, add_ones=add_ones, col_nan_allowed=12.5, tot_nan_allowed=7.5,
-        )
+        df = preprocess_input_data(df, Label, Setting, add_ones=add_ones)
         _, psi_p, psi_m, _ = withdraw_variables(df, Label, Setting, bh_ge_zero=True)
     else:
         raise ValueError('Invalid case')
@@ -54,6 +49,9 @@ def load_data(Label, Setting, add_ones=True, case='real'):
 
 
 def load_data_forecast(Label, Setting, csv_format=',', add_ones=False):
+    """Not used in the main simulations.
+    """
+
     if csv_format == ',':
         sep, decimal = ',', '.'
     elif csv_format == ';':
@@ -62,17 +60,11 @@ def load_data_forecast(Label, Setting, csv_format=',', add_ones=False):
         raise ValueError('Invalid csv option.')
 
     df = pd.read_csv(Setting.input_data_path, sep=sep, decimal=decimal)
-    df = preprocess_input_data(
-        df, Label, Setting, add_ones=add_ones, col_nan_allowed=12.5, tot_nan_allowed=7.5,
-    )
+    df = preprocess_input_data(df, Label, Setting, add_ones=add_ones)
 
     wind_re = df[Label.dk1real].copy()
     wind_da = df[Label.dk1da].copy()
-    # df = df[list(Label.right_feature_order)]
     features = df[list(Setting.feature_case)].copy()
-    # df.drop(columns=Label.dk1real, inplace=True)
-    # features = df.copy()
-    # features = features[list(Setting.feature_case)]
 
     if Setting.lagging_features:
         for off in range(*Setting.lagging_values):
@@ -84,7 +76,9 @@ def load_data_forecast(Label, Setting, csv_format=',', add_ones=False):
     return wind_re, wind_da, features
 
 
-def generate_toy_steps_data(Label, Setting, add_ones=True):
+def generate_toy_dynamic_data(Label, Setting):
+    """Generates the wind and penalty data for the toy example that that compares OLNV against LP.
+    """
 
     n_samples = Setting.toy_samples
     n_forth = int(n_samples / 4)
@@ -117,10 +111,18 @@ def generate_toy_steps_data(Label, Setting, add_ones=True):
     return wind, psi_p, psi_m, features
 
 
-def generate_toy_convergence_data(Label, Setting):
+def generate_toy_smooth_vs_subgradient_data(Label, Setting):
+    """Generates the wind data for the toy example that compares the smooth and subgradient
+    implementations of OLNV.
+    """
 
-    n_samples = Setting.toy_samples
+    # Only the left side of the interval is included
+    time_index = pd.date_range(start=Setting.complete_data_set[0],
+                               end=Setting.complete_data_set[1], freq='H', closed='left')
+    n_samples = len(time_index)
     np.random.seed(seed=17)
+
+    # Generates two samples with almost equal mean
     w_forecast = np.random.uniform(10, Setting.wind_capacity - 10, size=n_samples)
     w_true = np.maximum(np.minimum(w_forecast + np.random.normal(0., scale=6., size=n_samples), Setting.wind_capacity), 0)
     mean_diff = np.mean(w_true) - np.mean(w_forecast)
@@ -129,7 +131,6 @@ def generate_toy_convergence_data(Label, Setting):
     mean_diff = np.mean(w_true) - np.mean(w_forecast)
     assert mean_diff <= 0.05
 
-    time_index = pd.date_range(start='2016-12-31 00:00', periods=int(n_samples), freq='H')
     wind = pd.Series(data=w_true, name=Label.dk1real, index=time_index)
     features = pd.DataFrame({Label.ones: np.ones(n_samples), Label.dk1da: w_forecast}, index=time_index)
 
@@ -248,34 +249,3 @@ def compute_optimal_lp_q(wind, psi_p, psi_m, x_data, y_bounds, q_0=None, config=
     return q_j, obj_func
 
 
-def sigmoidp(x):
-    if x <= 0:
-        return 1 / (1 + exp(x))
-    else:
-        return 1 - 1 / (1 + exp(-x))
-
-
-def sigmoidn(x):
-    if x <= 0:
-        return 1 - 1/(1 + exp(x))
-    else:
-        return 1/(1 + exp(-x))
-
-
-def exp_func_01(x):
-    return log(1 + exp(-x))
-
-
-def exp_func_02(x):
-    if x <= 0:
-        return exp(x) / (1 + exp(x)) ** 2
-    else:
-        return 1 / (1 + exp(-x)) - 1 / (1 + exp(-x)) ** 2
-
-
-def exp_func_03(x, alpha, capacity):
-    x = max(- capacity, min(capacity, x)) / alpha
-    if x <= 0:
-        return exp(x) / (1 + exp(x)) ** 2
-    else:
-        return 1 / (1 + exp(-x)) - 1 / (1 + exp(-x)) ** 2

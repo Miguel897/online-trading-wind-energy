@@ -4,12 +4,12 @@ import numpy as np
 import pandas as pd
 from functions_standard import time_it
 from dataclasses import dataclass
-from functions_core import (
+from functions_specific import (
     load_data,
     compute_optimal_lp_q,
 )
 # from config_lp2 import Label, Setting
-from config2_online_bidding import Label, Setting
+from config3a_case_study_olnv import Label, Setting
 
 
 # @time_it   # To obtain the time of computing the best single q in hindsight q^H

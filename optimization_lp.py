@@ -1,3 +1,6 @@
+"""This file includes functions and model to execute the LP method.
+"""
+
 from os.path import join
 import pyomo.environ as pe
 from numpy import shape, ones
@@ -28,7 +31,7 @@ standard_solving_configuration = {
 
 def create_bigadata_nv_model(data):
 
-    x_ij, y_i = data['x_ij'], data['y_i']
+    x_ij, E_i = data['x_ij'], data['y_i']
     psi_p_i, psi_m_i = data['psi_p_i'], data['psi_m_i']
     try:
         y_bounds = data['y_bounds']
@@ -60,10 +63,10 @@ def create_bigadata_nv_model(data):
         # + lamb * sum(m.q_j[j]**2 for j in m.j), sense=pe.minimize)  # Regularization
 
     def con_rule_u_i(m, i):
-        return m.u_i[i] >= y_i[i] - sum(m.q_j[j] * x_ij.iat[i, j] for j in m.j)
+        return m.u_i[i] >= E_i[i] - sum(m.q_j[j] * x_ij.iat[i, j] for j in m.j)
 
     def con_rule_o_i(m, i):
-        return m.o_i[i] >= -1 * y_i[i] + sum(m.q_j[j] * x_ij.iat[i, j] for j in m.j)
+        return m.o_i[i] >= -1 * E_i[i] + sum(m.q_j[j] * x_ij.iat[i, j] for j in m.j)
 
     def con_rule_q(m, i):
         return y_bounds[0], sum(m.q_j[j] * x_ij.iat[i, j] for j in m.j), y_bounds[1]
@@ -189,6 +192,7 @@ def extract_additional_information(solver_output):
 
     solver_additional_information = {}
 
+    # Depending on the CPLEX version one of the following should work
     instructions = {
         'absolute_gap': 'solver_output.solution(0).gap',
         'lower_bound': 'solver_output.problem(0).lower_bound',

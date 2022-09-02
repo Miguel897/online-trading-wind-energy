@@ -1,3 +1,5 @@
+from math import exp, log
+
 import pandas as pd
 import numpy as np
 import time
@@ -638,6 +640,34 @@ class ExponentialMovingAverage:
         plt.show()
 
 
-if __name__ == '__main__':
-    pass
+def sigmoidp(x):
+    if x <= 0:
+        return 1 / (1 + exp(x))
+    else:
+        return 1 - 1 / (1 + exp(-x))
 
+
+def sigmoidn(x):
+    if x <= 0:
+        return 1 - 1/(1 + exp(x))
+    else:
+        return 1/(1 + exp(-x))
+
+
+def exp_func_01(x):
+    return log(1 + exp(-x))
+
+
+def exp_func_02(x):
+    if x <= 0:
+        return exp(x) / (1 + exp(x)) ** 2
+    else:
+        return 1 / (1 + exp(-x)) - 1 / (1 + exp(-x)) ** 2
+
+
+def exp_func_03(x, alpha, capacity):
+    x = max(- capacity, min(capacity, x)) / alpha
+    if x <= 0:
+        return exp(x) / (1 + exp(x)) ** 2
+    else:
+        return 1 / (1 + exp(-x)) - 1 / (1 + exp(-x)) ** 2

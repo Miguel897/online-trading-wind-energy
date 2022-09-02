@@ -4,12 +4,12 @@ import pandas as pd
 from time import process_time
 from os.path import join
 from functions_standard import (
-    parallel_half_space_projection,
+    parallel_half_space_projection, sigmoidp, exp_func_01, exp_func_03,
 )
-from functions_core import (
-    load_data, compute_optimal_lp_q, sigmoidp, exp_func_01, exp_func_03
+from functions_specific import (
+    load_data, compute_optimal_lp_q
 )
-from config2c_smooth_toy import Label, Setting
+from config2a_toy_dynamic_behaviour_olnv import Label, Setting
 
 
 class NVOnline:
@@ -134,42 +134,13 @@ class NVOnline:
             #     gradient = pd.DataFrame((aux * x).reshape((1, -1)), columns=self.x.columns)
             # else:
             gradient = pd.DataFrame(gradient, columns=self.x.columns)
-        elif method == self.newton_method:
-            self.compute_gradient(q, method=self.steepest_method, update_gradient=True)
-
-            try:
-                self.compute_hessian_matrix(q, update_hessian=True)
-                gradient = np.linalg.inv(self.hessian) @ self.gradient.values.transpose()
-                gradient = pd.DataFrame(gradient.transpose(), columns=self.gradient.columns)
-            except np.linalg.LinAlgError:
-                gradient, update_gradient = self.eta * self.gradient, False
-                print('Warning Hessian not invertible. Using steepest step instead.')
+        else:
+            raise ValueError('Invalid method.')
 
         if update_gradient:
             self.gradient = gradient
 
         return gradient
-
-    def compute_hessian_matrix(self, q, update_hessian=True):
-
-        if self.prices_mode == Label.bidding_mode:
-            c_vec = 1 / self.memory_length * np.array([(pp + pm) / self.alpha * exp_func_03(e - self.dot(x, q), self.alpha, Setting.wind_capacity)
-                                                       for x, e, pp, pm in self.memory_points])
-        elif self.prices_mode == Label.forecasting_mode:
-            c_vec = 1 / self.memory_length * np.array([(1 + 1) / self.alpha * exp_func_03(e - self.dot(x, q), self.alpha, Setting.wind_capacity)
-                                                       for x, e, _, _ in self.memory_points])
-        x_mem = [x for x, _, _, _ in self.memory_points]
-        hessian_t = [c_t * x_t.reshape((-1, 1)) @ x_t.reshape((1, -1)) for x_t, c_t in zip(x_mem, c_vec)]
-        hessian = np.array(hessian_t).sum(axis=0)
-        # rank = np.linalg.matrix_rank(hessian)
-        # x, e, pp, pm = self.memory_point[0]
-        # print(self.memory_point[0])
-        # print('The rank of the Hessian is: ', rank)
-
-        if update_hessian:
-            self.hessian = hessian
-
-        return hessian
 
     def update_eta(self, i):
 
@@ -393,23 +364,9 @@ class NVOnline:
         fig = plt.gcf()
         fig.savefig(join(Setting.sim_path, Setting.timestamp + 'regret' + '.png'))
 
-        # ax = plt.subplot(3,1)
-        # ax[0].plot(steps, true_objective, color='blue', label='True obj.')
-        # plt.plot(iterations, smooth_objective, color='cyan', label='Smooth obj.')
-        # plt.xticks(np.arange(min(iterations) - 1, max(iterations) + 1, 1.0))
-        # plt.xlabel('Iterations')
-        # plt.ylabel('Obj. value')
-        # plt.title(r'Convergence for $\alpha = $' + str(self.alpha))
-        # plt.legend()
-        # plt.show()
-        # print(true_objective)
-        # print(smooth_objective)
-        # print([smooth_objective[-1] < x for x in smooth_objective])
-        # print([true_objective[-1] < x for x in true_objective])
 
-
-def main_03_toy_step():
-    wind, b_data, h_data, x_data = load_data(Label, Setting, add_ones=True, case='convergence')
+def main():
+    wind, b_data, h_data, x_data = load_data(Label, Setting, add_ones=True, case='dynamic')
     nv_online = NVOnline(x=x_data, E=wind, psi_p=b_data, psi_m=h_data, alpha=Setting.alpha, prices_mode=Setting.mode,
                          memory_length=Setting.memory_length, lamb=1, eta=Setting.eta, verbose_step=Setting.verbose_steps)
 
@@ -420,4 +377,4 @@ def main_03_toy_step():
 
 
 if __name__ == '__main__':
-    main_03_toy_step()
+    main()

@@ -5,13 +5,13 @@ from time import process_time
 from os.path import join
 from functions_standard import (
     create_directory, parallel_half_space_projection,
-    get_timestamp_label,
+    get_timestamp_label, sigmoidp, exp_func_01, exp_func_03,
 )
-from functions_core import (
-    load_data, sigmoidp, exp_func_01, exp_func_03
+from functions_specific import (
+    load_data
 )
 from itertools import product
-from config2_online_bidding import Label, Setting
+from config3a_case_study_olnv import Label, Setting
 
 
 class NVOnline:
