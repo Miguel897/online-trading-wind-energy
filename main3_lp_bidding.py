@@ -4,7 +4,7 @@ import pandas as pd
 from time import process_time
 from os.path import join
 from functions_core import (
-    load_data, compute_fixed_action_q,
+    load_data, compute_optimal_lp_q,
     compute_feasible_set_diameter, )
 from config3_lp_bidding import Label, Setting
 
@@ -97,7 +97,7 @@ class NVlp:
         elif self.price_mode == Label.forecasting_mode:
             psi_p = pd.Series(np.ones(len(psi_p)), index=psi_p.index)
             psi_m = pd.Series(np.ones(len(psi_m)), index=psi_m.index)
-        q_j, obj_func = compute_fixed_action_q(E, psi_p, psi_m, x_data, y_bounds, q_0=self.q.values[0])
+        q_j, obj_func = compute_optimal_lp_q(E, psi_p, psi_m, x_data, y_bounds, q_0=self.q.values[0])
         # self.q = q_j
         self.q = pd.DataFrame([q_j], columns=self.q.columns)
 
@@ -207,7 +207,7 @@ class NVlp:
         cost = pd.Series(self.cost_series, index=E_d.index, name='Cost')
         bnch_cost = pd.Series(self.bench_cost, index=E_d.index, name='BCost')
 
-        q_fixed, cost_fixed = compute_fixed_action_q(E, psi_p, psi_m, x, (0, Setting.wind_capacity))
+        q_fixed, cost_fixed = compute_optimal_lp_q(E, psi_p, psi_m, x, (0, Setting.wind_capacity))
         E_fixed = (x * q_fixed).sum(axis=1)
         E_fixed.name = 'E_fixed'
         E_fix_cost = pd.Series(self.evaluate_true_cost(q_fixed), index=E_d.index, name='E_fix_cost')

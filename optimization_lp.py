@@ -3,15 +3,17 @@ import pyomo.environ as pe
 from numpy import shape, ones
 from pyomo.environ import SolverFactory, SolverManagerFactory
 from pyomo.opt.results.solver import SolverStatus as SolSt, TerminationCondition as TermCond
-from auxiliary.optimization_utils import solve_optimization_model_direct
+
 
 # Example of a solving configuration used in solve_optimization_model.
 standard_solving_configuration = {
     'solver_name': 'cplex',
+    # 'solver_name': 'cplex_direct',
     'solve_options': {},
     'solver_factory_options': {'options': {
-        'logfile': 'cplex.log',
-        'output_clonelog': -1,
+        # 'logfile': 'cplex.log',
+        # 'output_clonelog': -1,
+        # 'threads': 7,
     }},
     'verbose': False,
     'display_info': False,
@@ -27,10 +29,14 @@ standard_solving_configuration = {
 def create_bigadata_nv_model(data):
 
     x_ij, y_i = data['x_ij'], data['y_i']
-    b_i, h_i = data['b_i'], data['h_i']
-    y_bounds = data['y_bounds']
+    psi_p_i, psi_m_i = data['psi_p_i'], data['psi_m_i']
+    try:
+        y_bounds = data['y_bounds']
+    except KeyError:
+        y_bounds = (None, None)
     q_j_bounds = data['q_j_bounds']
     N, p = shape(x_ij)
+
     try:
         q_0 = data['q_0']
         q_0 = {k: v for k, v in enumerate(q_0)}
@@ -38,21 +44,20 @@ def create_bigadata_nv_model(data):
         q_0 = None
         # pass
     try:
-        b_i[0]  # Chek if vector-like or integer
+        psi_p_i[0]  # Chek if vector-like or integer
     except (TypeError, IndexError):
-        b_i = ones(N) * b_i
-        h_i = ones(N) * h_i
+        psi_p_i = ones(N) * psi_p_i
+        psi_m_i = ones(N) * psi_m_i
 
     m = pe.ConcreteModel()
     m.i = pe.Set(initialize=range(N), ordered=True, doc='Training data set')
     m.j = pe.Set(initialize=range(p), ordered=True,  doc='Features set')
-    m.q_j = pe.Var(m.j, within=pe.Reals, initialize=q_0, bounds=q_j_bounds, doc='Decision regressors')
-    # m.q_j = pe.Var(m.j, within=pe.Reals, initialize={0: 0, 1: 1}, bounds=q_j_bounds, doc='Decision regressors')
+    m.q_j = pe.Var(m.j, within=pe.Reals, initialize=q_0, bounds=q_j_bounds, doc='Regressors')
     m.u_i = pe.Var(m.i, within=pe.NonNegativeReals, doc='Auxiliary var')
     m.o_i = pe.Var(m.i, within=pe.NonNegativeReals, doc='Auxiliary var')
 
-    m.obj = pe.Objective(expr=1 / N * sum(b_i[i] * m.u_i[i] + h_i[i] * m.o_i[i] for i in m.i), sense=pe.minimize)
-        # + lamb * sum(m.q_j[j]**2 for j in m.j), sense=pe.minimize)
+    m.obj = pe.Objective(expr=1 / N * sum(psi_p_i[i] * m.u_i[i] + psi_m_i[i] * m.o_i[i] for i in m.i), sense=pe.minimize)
+        # + lamb * sum(m.q_j[j]**2 for j in m.j), sense=pe.minimize)  # Regularization
 
     def con_rule_u_i(m, i):
         return m.u_i[i] >= y_i[i] - sum(m.q_j[j] * x_ij.iat[i, j] for j in m.j)
@@ -66,33 +71,6 @@ def create_bigadata_nv_model(data):
     m.con1 = pe.Constraint(m.i, rule=con_rule_u_i, doc='Restriction u_i')
     m.con2 = pe.Constraint(m.i, rule=con_rule_o_i, doc='Restriction o_i')
     m.con3 = pe.Constraint(m.i, rule=con_rule_q, doc='Total power constrain')
-
-    return m
-
-
-def create_feasible_set_diameter_model(data):
-
-    x_ij, y_i = data['x_ij'], data['y_i']
-    y_bounds = data['y_bounds']
-    q_j_bounds = data['q_j_bounds']
-    N, p = shape(x_ij)
-
-    m = pe.ConcreteModel()
-    m.i = pe.Set(initialize=range(N), ordered=True, doc='Training data set')
-    m.j = pe.Set(initialize=range(p), ordered=True,  doc='Features set')
-    m.q1 = pe.Var(m.j, within=pe.Reals, bounds=q_j_bounds, doc='Decision regressors')
-    m.q2 = pe.Var(m.j, within=pe.Reals, bounds=q_j_bounds, doc='Decision regressors')
-
-    m.obj = pe.Objective(expr=sum(m.q1[j] ** 2 - 2 * m.q1[j] * m.q2[j] + m.q2[j] ** 2 for j in m.j), sense=pe.maximize)
-
-    def con_rule_q1(m, i):
-        return y_bounds[0], sum(m.q1[j] * x_ij.iat[i, j] for j in m.j), y_bounds[1]
-
-    def con_rule_q2(m, i):
-        return y_bounds[0], sum(m.q2[j] * x_ij.iat[i, j] for j in m.j), y_bounds[1]
-
-    m.con1 = pe.Constraint(m.i, rule=con_rule_q1, doc='Total power constrain')
-    m.con2 = pe.Constraint(m.i, rule=con_rule_q2, doc='Total power constrain')
 
     return m
 
@@ -221,6 +199,20 @@ def extract_additional_information(solver_output):
         'relative_gap': 'solver_output.solution(0).gap / (1e-10 + abs(' +
             'solver_output.solution(0).objective[\'__default_objective__\'][\'Value\']))',
     }
+
+    # instructions = {
+    #     'lower_bound': 'solver_output.problem(0).lower_bound',
+    #     'upper_bound': 'solver_output.problem(0).upper_bound',
+    #     'time': 'solver_output.solver(0).wallclock_time',
+    #     'solver_status': 'solver_output.solver(0).status.value',
+    #     'termination_condition': 'solver_output.solver(0).termination_condition.value',
+    #     'absolute_gap': 'solver_output.problem(0).upper_bound - solver_output.problem(0).lower_bound',
+    #     # 'relative_gap': '(solver_additional_information[\'upper_bound\']' +
+    #     #                 '- solver_additional_information[\'lower_bound\'])' +
+    #     #                 '/ (1e-10 + abs(solver_additional_information[\'upper_bound\']))',
+    #     'relative_gap': '(solver_output.problem(0).upper_bound - solver_output.problem(0).lower_bound)' +
+    #                     ' / (1e-10 + abs(solver_output.problem(0).upper_bound))',
+    # }
 
     # Relative gap: Added 1e-10 as in CPLEX. Using default objective to be
     # valid minimizing or maximizing.

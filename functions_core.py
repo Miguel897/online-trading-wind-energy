@@ -1,26 +1,21 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Jan  9 16:11:50 2019
-
-@author: USUARIO
-"""
-from math import exp, log
-
 import pandas as pd
 import numpy as np
-from auxiliary.functions_standard import (
+from math import exp, log
+from functions_standard import (
     check_limits,
     append_ones,
     float_dict_to_string as fd2st,
     augment_feature_space,
     compute_metrics,
 )
-
-
-# from optimization import (
-#     solve_optimization_model,
-#     create_bigadata_nv_model,
-# )
+from optimization_lp import (
+    create_bigadata_nv_model,
+    standard_solving_configuration,
+)
+try:
+    from additional_files.optimization_utils import solve_optimization_model_direct as solve_optimization_model
+except ModuleNotFoundError:
+    from optimization_lp import solve_optimization_model
 
 
 def load_data(Label, Setting, add_ones=True, case='real'):
@@ -30,32 +25,32 @@ def load_data(Label, Setting, add_ones=True, case='real'):
         df = preprocess_input_data(
             df, Label, Setting, add_ones=add_ones, col_nan_allowed=12.5, tot_nan_allowed=7.5,
         )
-        wind, b_data, h_data, features = withdraw_variables(df, Label, Setting, bh_ge_zero=True)
+        wind, psi_p, psi_m, features = withdraw_variables(df, Label, Setting, bh_ge_zero=True)
     elif case == 'synthetic':
-        wind, b_data, h_data, features = generate_toy_steps_data(Label, Setting)
+        wind, psi_p, psi_m, features = generate_toy_steps_data(Label, Setting)
     elif case == 'convergence':
         wind, features = generate_toy_convergence_data(Label, Setting)
         df = pd.read_csv(Setting.input_data_path, sep=',', decimal='.')
         df = preprocess_input_data(
             df, Label, Setting, add_ones=add_ones, col_nan_allowed=12.5, tot_nan_allowed=7.5,
         )
-        _, b_data, h_data, _ = withdraw_variables(df, Label, Setting, bh_ge_zero=True)
+        _, psi_p, psi_m, _ = withdraw_variables(df, Label, Setting, bh_ge_zero=True)
     else:
         raise ValueError('Invalid case')
 
     if Label.price_lag1[0] in Setting.feature_case:
         off = Setting.price_offset
-        # add_price_lag(features, b_data, h_data)
-        features.loc[features.index[off:], 'psi_p_l1'] = b_data.values[:-off]
-        features.loc[features.index[off:], 'psi_m_l1'] = h_data.values[:-off]
-        features.loc[features.index[off:], 'tau_l1'] = b_data.values[:-off] / (b_data.values[:-off] + h_data.values[:-off] + 1e-5)
+        features.loc[features.index[off:], 'psi_p_l1'] = psi_p.values[:-off]
+        features.loc[features.index[off:], 'psi_m_l1'] = psi_m.values[:-off]
+        features.loc[features.index[off:], 'tau_l1'] = psi_p.values[:-off] \
+                                                       / (psi_p.values[:-off] + psi_m.values[:-off] + 1e-5)
 
     features = features[list(Setting.feature_case)]
 
     if Setting.feature_space == 'spline':
         features = augment_feature_space(features, columns=Setting.augmented_features, dgf=Setting.augmented_df)
 
-    return wind, b_data, h_data, features
+    return wind, psi_p, psi_m, features
 
 
 def load_data_forecast(Label, Setting, csv_format=',', add_ones=False):
@@ -77,7 +72,6 @@ def load_data_forecast(Label, Setting, csv_format=',', add_ones=False):
     features = df[list(Setting.feature_case)].copy()
     # df.drop(columns=Label.dk1real, inplace=True)
     # features = df.copy()
-
     # features = features[list(Setting.feature_case)]
 
     if Setting.lagging_features:
@@ -88,9 +82,6 @@ def load_data_forecast(Label, Setting, csv_format=',', add_ones=False):
         features = augment_feature_space(features, columns=Setting.augmented_features, dgf=Setting.augmented_df)
 
     return wind_re, wind_da, features
-
-# def add_price_lag(features, b, h):
-#     features['psi_p_l1'] = b.values[1:]
 
 
 def generate_toy_steps_data(Label, Setting, add_ones=True):
@@ -193,15 +184,15 @@ def preprocess_input_data(
 def withdraw_variables(df, Label, Setting, bh_ge_zero=False):
 
     # Withdraw price_mode and wind
-    p_im_pos = df[Label.p_dw]  # im_pos associated with producing more than expected
+    p_im_pos = df[Label.p_dw]  # price related to producing more than expected
     p_im_neg = df[Label.p_up]
     p_ah = df[Label.p_spot]
     wind_data = df[Label.dk1real]
-    b = p_ah - p_im_pos  # psi_+
-    h = p_im_neg - p_ah  # psi_-
+    psi_p = p_ah - p_im_pos  # psi_+
+    psi_n = p_im_neg - p_ah  # psi_-
     if bh_ge_zero:
-        b[b < 0] = 0
-        h[h < 0] = 0
+        psi_p[psi_p < 0] = 0
+        psi_n[psi_n < 0] = 0
 
     # df.drop([Label.real, Label.p_spot, Label.p_up, Label.p_dw], axis=1, inplace=True)
     df = df[list(Label.right_feature_order)].copy()
@@ -209,7 +200,7 @@ def withdraw_variables(df, Label, Setting, bh_ge_zero=False):
     if Setting.scaling != 'nonor':
         wind_data = wind_data / Setting.wind_capacity
 
-    return wind_data, b, h, df
+    return wind_data, psi_p, psi_n, df
 
 
 def compute_results(X_mat, Y_mat, b, h, q_j_dict, Label, y_bounds=None, prefix=""):
@@ -229,180 +220,32 @@ def compute_results(X_mat, Y_mat, b, h, q_j_dict, Label, y_bounds=None, prefix="
         return prediction, metric_dict
 
 
-def compute_fixed_action_q(wind, b_data, h_data, x_data, y_bounds, q_0=None):
-    from optimization_lp import (
-        create_bigadata_nv_model, solve_optimization_model_direct,
-    )
+def compute_optimal_lp_q(wind, psi_p, psi_m, x_data, y_bounds, q_0=None, config=None, extra_options=None):
 
-    standard_solving_configuration = {
-        'solver_name': 'cplex_direct',
-        'solve_options': {'warmstart': True},
-        'solver_factory_options': {'options': {
-            # 'logfile': 'cplex.log',
-            # 'output_clonelog': -1,
-            # 'threads': 7
-        }},
-        'verbose': False,
-        'display_info': False,
-        'write_info': False,
-        'solver_file_name': 'solver_info',
-        'model_file_name': 'pyomo_model',
-        'file_extension': '.txt',
-        'saving_path': '',
-        'timestamp': '',
-    }
-
-    standard_solving_configuration['solver_factory_options']['options']['simplex_tolerances_optimality'] = 1e-2
-    standard_solving_configuration['solver_factory_options']['options']['lpmethod'] = 2  # Dual simplex
+    if config is None:
+        config = standard_solving_configuration.copy()
+    if extra_options is not None:
+        config['solver_factory_options']['options'].update(extra_options)
 
     data = {
         'y_i': wind,
         'x_ij': x_data,
-        'b_i': b_data,
-        'h_i': h_data,
+        'psi_p_i': psi_p,
+        'psi_m_i': psi_m,
+        'lamb': 0,
         'y_bounds': y_bounds,
         'q_j_bounds': (None, None),
     }
     if q_0 is not None:
         data['q_0'] = q_0
+        config['solve_options']['warmstart'] = True
 
     model = create_bigadata_nv_model(data)
-    # solved_model, solver_status, solver_additional_information = solve_optimization_model_direct(
-    solved_model, solver_status, solver_additional_information = solve_optimization_model_direct(
-        model, standard_solving_configuration)
+    solved_model, solver_status, solver_additional_information = solve_optimization_model(model, config)
     q_j = list(solved_model.q_j[j].value for j in solved_model.j)
     obj_func = solver_additional_information['upper_bound']
 
-    # from main1_gradient_solver import newton_solver
-    # q_n0 = pd.DataFrame({c: np.array([1e-2]) for c in x_data.columns})
-    # q_n0['DK1_won_da'] = 1
-    # q_n, obj_n = newton_solver(q_n0, data)
-    # q_n = list(q_n.values)
-    # q_j, obj_func = q_n, obj_n
-
     return q_j, obj_func
-
-
-def compute_feasible_set_diameter(wind, x_data, y_bounds, q_0=None):
-    from optimization_lp import (
-        create_feasible_set_diameter_model, solve_optimization_model_direct,
-    )
-
-    standard_solving_configuration = {
-        'solver_name': 'cplex_direct',
-        'solve_options': {},
-        'solver_factory_options': {'options': {
-            # 'logfile': 'cplex.log',
-            # 'output_clonelog': -1,
-            # 'threads': 7
-            'optimalitytarget': 3,
-        }},
-        'verbose': True,
-        # 'display_info': True,
-        'display_info': False,
-        'write_info': True,
-        'solver_file_name': 'solver_info',
-        'model_file_name': 'pyomo_model',
-        'file_extension': '.txt',
-        'saving_path': '',
-        'timestamp': '',
-    }
-
-    standard_solving_configuration['solver_factory_options']['options']['simplex_tolerances_optimality'] = 1e-2
-    standard_solving_configuration['solver_factory_options']['options']['lpmethod'] = 2  # Dual simplex
-
-    data = {
-        # 'y_i': wind[100:2000],
-        # 'y_i': wind[100:200],
-        'y_i': wind[100:250],
-        # 'y_i': wind[200:300],
-        # 'x_ij': x_data[100:2000],
-        # 'x_ij': x_data[100:200],
-        'x_ij': x_data[100:250],
-        # 'x_ij': x_data[200:300],
-        'y_bounds': y_bounds,
-        'q_j_bounds': (None, None),
-    }
-    # x_ij, y_i = data['x_ij'][100:2000], data['y_i'][100:2000]
-
-    if q_0 is not None:
-        data['q_0'] = q_0
-
-    model = create_feasible_set_diameter_model(data)
-    solved_model, solver_status, solver_additional_information = solve_optimization_model_direct(
-        model, standard_solving_configuration)
-    q1 = list(solved_model.q1[j].value for j in solved_model.j)
-    q2 = list(solved_model.q2[j].value for j in solved_model.j)
-    print(q1)
-    print(q2)
-    from scipy.spatial.distance import euclidean
-    distance = euclidean(q1, q2)
-    print(distance)
-    pass
-    # obj_func = solver_additional_information['upper_bound']
-
-    # return q_j, obj_func
-
-# def compute_coefficients(
-#         data, labels, optimization_configuration
-# ):
-#
-#     model = create_bigadata_nv_model(data)
-#     model, solver_status, solver_additional_information = solve_optimization_model(
-#         model, optimization_configuration
-#     )
-#     q_j = [model.q_j[j].value for j in model.j]
-#     q_j_dict, err = check_q_j(q_j, labels)
-#     solver_status['coef_error_rate'] = err
-#
-#     return q_j_dict, solver_status
-#
-#
-# def save_results(
-#         metric_container, q_j_container,
-#         benchmark_container, prediction_container,
-#         Label, Param, Setting,
-# ):
-#     f_name = get_timestamp_label(underscore=True) + Setting.global_results_name
-#     writer = pd.ExcelWriter(
-#         join(Setting.simulation_full_path, f_name + Label.excel), engine='xlsxwriter'
-#     )
-#
-#     # Save metrics
-#     for metric in Label.metric_list:
-#         for data_set, prefix in zip(Label.sets, ['in_', 'out_']):
-#             pd.DataFrame(
-#                 metric_container[data_set][metric],
-#                 index=Label.met_indexes, columns=Label.met_columns
-#             ).to_excel(writer, sheet_name=prefix + metric)
-#
-#     # Save q_j containers
-#     q_j_container.to_excel(writer, sheet_name='q_j_values')
-#
-#     # Save predictions
-#     prediction_index = tuple(pd.date_range(
-#         start=Setting.test_set[0],
-#         end=Setting.test_set[1] - datetime.timedelta(hours=1),
-#         freq='1H').strftime('%Y-%m-%d_%H:%M:%S').tolist())
-#
-#     n_pred = len(benchmark_container['real'])
-#     prd_lst = [
-#         np.reshape(np.array(sum([[d] * Param.dayh for d in range(int(n_pred / Param.dayh))], [])), (-1, 1)),
-#         benchmark_container['real'].reshape((-1, 1)),
-#         np.reshape(benchmark_container['bench'], (-1, 1)),
-#     ]
-#
-#     for case in Setting.cases:
-#         prd_lst.append(np.reshape(prediction_container[case], (-1, 1)))
-#
-#     pd.DataFrame(
-#         np.concatenate(prd_lst, axis=1),
-#         index=prediction_index,
-#         columns=['day', 'real', 'bench'] + ['C{}'.format(c) for c in Setting.cases]
-#     ).to_excel(writer, sheet_name='Predictions')
-#
-#     # Write all sheets to file
-#     writer.save()
 
 
 def sigmoidp(x):

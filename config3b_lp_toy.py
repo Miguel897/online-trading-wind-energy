@@ -3,93 +3,17 @@ from dataclasses import dataclass
 from os import getcwd
 from os.path import join
 from functools import reduce
-from auxiliary.functions_standard import (
+from config_label import Label
+from functions_standard import (
     get_timestamp_label,
-    PlatformContext,
-    SimulationContext,
     create_directory,
 )
 
-platform_context = PlatformContext()
-simulation_list = ['e1']
-
-if platform_context.is_pc:
-    input_path = r'C:\DATOS\01_CON_RESPALDO\Input\20210929_online'
-    simulation_path = r'C:\DATOS\01_CON_RESPALDO\Simulaciones'
-    # copy_source_files(folder_timestamp)
-    timestamp = get_timestamp_label(underscore=True)
-    # simulation_path = join(simulation_path, timestamp + 'online_nv')
-    # save_code2(simulation_path=simulation_path, ignore=('z_*', 'test_*', '*.xlsx', '*.csv'))
-    platform_context_parameters = {
-        'threads': 7,
-    }
-    simulation_context_parameters = {
-        'full_simulation_list': simulation_list,
-        'default_simulation_mode': 'all',
-        # 'default_simulation_mode': 'index',  # To run a single case in PC ... \
-        # 'sim_cases_indexes': [5],  # ... uncomment this two lines
-    }
-elif platform_context.is_ada:
-    input_path = join(getcwd(), 'input')
-    simulation_path = join(getcwd(), 'Simulaciones')
-    platform_context_parameters = {
-        'threads': 7,
-        'temporary_dir': simulation_path,
-    }
-    simulation_context_parameters = {
-        'default_simulation_mode': 'all',
-        'full_simulation_list': simulation_list,
-    }
-elif platform_context.is_picasso:
-    input_path = join(getcwd(), 'input')
-    simulation_path = join(getcwd(), 'Simulaciones')
-    platform_context_parameters = {
-        'threads': 4,
-        'temporary_dir': simulation_path,
-    }
-    simulation_context_parameters = {
-        'default_simulation_mode': 'batch',
-        'full_simulation_list': simulation_list,
-        # 'batch_size': 1,  # Number of cases to run per job. Required mode: batch
-    }
-else:
-    raise ValueError('Unable to detect platform.')
-
-platform_context.update_environ_variables(**platform_context_parameters)
-script_simulation_list = SimulationContext(**simulation_context_parameters).script_simulation_list
-script_simulation_dict = {i: i for i in script_simulation_list}
-
-
-@dataclass
-class Label:
-    met_indexes: tuple
-    met_columns: tuple
-    binary_features: tuple
-    right_feature_order: tuple
-    excel: str = '.xlsx'
-    ones: str = 'ones'
-    time: str = 'TimeUTC'
-    dk1real: str = 'DK1_won_real'
-    dk1da: str = 'DK1_won_da'
-    p_spot: str = 'SpotPriceEUR'
-    p_up: str = 'BalancingPowerPriceUpEUR'
-    p_dw: str = 'BalancingPowerPriceDownEUR'
-    enhanced_forecast: str = 'DK1_FM3_output'
-    forecasting_mode: str = 'FORECASTING'
-    bidding_mode: str = 'BIDDING'
-    smoothing_mode: str = 'SMOOTH'
-    id: str = 'ID'
-    metric_list: tuple = ('MAE', 'MAPE', 'RMSE', 'AOL')
-    scaling_types: tuple = ('nonor', 'max', 'mnmx', 'stdr')
-    sets: tuple = ('training', 'test')
-    main_wind_features: tuple = ('DK1_won_da', 'DK1_woff_da')
-    dk1_extra_features: tuple = ('DK1_SchedGen', 'DK1_SolarDahead', 'DK1_TotalLoadDahead')
-    neighbor_wind_features: tuple = ('DK2_won_da', 'DK2_woff_da', 'DEATLU_won_da', 'DEATLU_woff_da',
-                                     'NO2_won_da', 'SE3_won_da', 'SE4_won_da')
-    dk_wind_features: tuple = ('DK1_won_da', 'DK1_woff_da', 'DK2_won_da', 'DK2_woff_da')
-    day_hours: tuple = tuple('hour' + str(i) for i in range(24))
-    week_days: tuple = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')
-    price_lag1: tuple = ('psi_p_l1', 'psi_m_l1', 'tau_l1')
+try:
+    from private_files.functions_private import update_context_variables
+    input_path, simulation_path, _ = update_context_variables()
+except ModuleNotFoundError:
+    input_path, simulation_path = getcwd(), getcwd()
 
 
 @dataclass

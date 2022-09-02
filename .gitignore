@@ -4,3 +4,4 @@ __pycache__
 *.log
 csv_files/
 private_files/
+additional_files/

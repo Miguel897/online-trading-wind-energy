@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from time import process_time
 from os.path import join
-from auxiliary.functions_standard import (
+from functions_standard import (
     create_directory, parallel_half_space_projection,
     get_timestamp_label,
 )
@@ -349,7 +349,7 @@ class NVOnline:
         cost = pd.Series(self.cost_series, index=E_d.index, name='Cost')
         bnch_cost = pd.Series(self.bench_cost, index=E_d.index, name='BCost')
 
-        # q_fixed, cost_fixed = compute_fixed_action_q(E, psi_p, psi_m, x, (0, Setting.wind_capacity))
+        # q_fixed, cost_fixed = compute_optimal_lp_q(E, psi_p, psi_m, x, (0, Setting.wind_capacity))
         # q_fixed = [8.062370463049456, 0.8525360309677276, 0.06398442124976188, 7.238483110156916, -0.442520053664792, 254.109049776738]
         # q_fixed = [0.0006638172659087248, 0.9472391210211782, -0.008471128226052494, 0.0009039209658037242, 0.018006481808051485, -0.009836785376805247, 0.07248148536644591, -0.0007649356173245372, 1.9882726707676128]
         q_fixed = [-0.024913307132494955, 0.9690279135869517, 0.000626040888787381, 0.021083792102166474, -0.010002166049799368, 0.06075696984002121, -0.0009084974297246443, 2.0639471112363212]

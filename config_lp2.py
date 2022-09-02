@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from os import getcwd
 from os.path import join
 from functools import reduce
-from auxiliary.functions_standard import (
+from functions_standard import (
     get_timestamp_label,
     PlatformContext,
     SimulationContext,

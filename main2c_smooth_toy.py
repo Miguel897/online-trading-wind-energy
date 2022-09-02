@@ -3,11 +3,11 @@ import numpy as np
 import pandas as pd
 from time import process_time
 from os.path import join
-from auxiliary.functions_standard import (
+from functions_standard import (
     parallel_half_space_projection,
 )
 from functions_core import (
-    load_data, compute_fixed_action_q, sigmoidp, exp_func_01, exp_func_03
+    load_data, compute_optimal_lp_q, sigmoidp, exp_func_01, exp_func_03
 )
 from config2c_smooth_toy import Label, Setting
 
@@ -321,7 +321,7 @@ class NVOnline:
         cost = pd.Series(self.cost_series, index=E_d.index, name='Cost')
         bnch_cost = pd.Series(self.bench_cost, index=E_d.index, name='BCost')
 
-        q_fixed, cost_fixed = compute_fixed_action_q(E, psi_p, psi_m, x, (0, Setting.wind_capacity))
+        q_fixed, cost_fixed = compute_optimal_lp_q(E, psi_p, psi_m, x, (0, Setting.wind_capacity))
         # q_fixed = [8.062370463049456, 0.8525360309677276, 0.06398442124976188, 7.238483110156916, -0.442520053664792, 254.109049776738]
         # cost_fixed = 249.762799129683
         E_fixed = (x * q_fixed).sum(axis=1)
